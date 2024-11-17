@@ -56,3 +56,6 @@ python evaluate_density.py \
 --density_cutoff 3 \
 --age_groups 40-50 50-60 60-70
 ```
+
+## Output
+The script outputs the relative risk, odds ratio, and optionally c-statistic of the density measurements. The output is saved in a CSV file with the same name as the input file, but with `_results` appended to the name. For example, if the input file is `example_input.csv`, the output file will be `example_input_results.csv`.
