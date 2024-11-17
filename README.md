@@ -1,4 +1,4 @@
-# Density Evaluator
+# Mammographic Density Evaluator
 
 Script to evaluate mammographic density as a predictor of breast cancer risk. Given density measurements and censored cancer data, the script computes the relative risk, odds ratio, and c-statistic of the density measurements.
 
