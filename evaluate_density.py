@@ -11,14 +11,13 @@ import datetime
 class Metrics(NamedTuple):
     relative_risk: float
     odds_ratio: float
-    c_index: float
 
 
 def caluclate_metrics(
-    density, cancer_label, censor_time, train_data, max_followup, density_cutoff=3
+    density, cancer_label, censor_time, max_followup, density_cutoff=3
 ) -> Metrics:
     """
-    Calculate the relative risk, odds ratio, and c-index of the model.
+    Calculate the relative risk, odds ratio of the model.
 
     Parameters
     ----------
@@ -28,8 +27,6 @@ def caluclate_metrics(
         True cancer labels
     censor_time : list
         Time of censoring
-    train_data : np.array
-        Training data for c-index calculation
     max_followup : int
         Truncation time in years
     density_cutoff : int
@@ -38,13 +35,11 @@ def caluclate_metrics(
     Returns
     -------
     Metrics
-        A named tuple with the relative risk, odds ratio, and c-index
+        A named tuple with the relative risk, odds ratio
         - relative_risk : float
             The relative risk of the model
         - odds_ratio : float
             The odds ratio of the model; maximum likelihood estimates of the odds ratios
-        - c_index : float
-            The c-index of the model
     """
     binary_density = np.int16(density >= density_cutoff)
     contingency_table = crosstab(binary_density, cancer_label)
@@ -80,16 +75,8 @@ def caluclate_metrics(
     )
     oratio = odds_ratio(table)
 
-    if train_data is not None:
-        test_data = np.column_stack((cancer_label, censor_time))  # shape n x 2
-
-        cindex, concordant, discordant, tied_risk, tied_time = concordance_index_ipcw(
-            train_data, test_data, density, tau=max_followup
-        )
-    else:
-        cindex = None
-
-    return Metrics(rr.relative_risk, oratio.statistic, cindex)
+    
+    return Metrics(rr.relative_risk, oratio.statistic)
 
 
 def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
@@ -155,26 +142,10 @@ def prepare_data(data: pd.DataFrame, args: ArgumentParser) -> tuple:
     Returns
     -------
     tuple
-        A tuple of density, cancer_label, censor_time, and train_data
+        A tuple of density, cancer_label, censor_time 
     """
     density, cancer_label, censor_time = format_data(data, args.max_followup)
-
-    # check if we need to compute the c-index
-    if args.compute_c_index:
-        assert not os.path.exists(
-            args.train_data
-        ), "Please provide the training data to compute the c-index"
-        train_data = pd.read_csv(args.input_train_file)
-        _, train_cancer_label, train_censor_time = format_data(
-            train_data, args.max_followup
-        )
-        train_data = np.column_stack(
-            (train_cancer_label, train_censor_time)
-        )  # shape n x 2
-    else:
-        train_data = None
-
-    return density, cancer_label, censor_time, train_data
+    return density, cancer_label, censor_time
 
 
 # input density, age, ethnicity
@@ -190,12 +161,6 @@ parser.add_argument(
     default=5,
     required=True,
     help="Truncation time in years. Starts at 0",
-)
-parser.add_argument(
-    "--compute_c_index", action="store_true", help="Compute the c-index."
-)
-parser.add_argument(
-    "--input_train_file", type=str, help="Path to the training data CSV file."
 )
 parser.add_argument(
     "--density_cutoff", type=str, default=3, help="Cutoff for density. Default is 3-4."
@@ -220,16 +185,15 @@ if __name__ == "__main__":
 
     # format dates
     for col in ["Exam Date", "Date of Last Negative Mammogram", "Date of Cancer Diagnosis"]:
-        data[col] = pd.to_datetime(data[col], format='%m/%d/%Y')
+        data[col] = pd.to_datetime(data[col], format='%Y-%m-%d') #'%m/%d/%Y'
 
     # prepare the data with correct censoring and cancer labels
-    density, cancer_label, censor_time, train_data = prepare_data(data, args)
+    density, cancer_label, censor_time = prepare_data(data, args)
 
     metrics = caluclate_metrics(
         density,
         cancer_label,
         censor_time,
-        train_data,
         args.max_followup,
         args.density_cutoff,
     )
@@ -238,17 +202,16 @@ if __name__ == "__main__":
     results["Censoring Year"].append(args.max_followup)
     results["Relative Risk"].append(metrics.relative_risk)
     results["Odds Ratio"].append(metrics.odds_ratio)
-    results["C Index"].append(metrics.c_index)
+    
 
     # evaluate per ethnicity
     for group in data["Ethnicity"].unique():
         group_data = data[data["Ethnicity"] == group]
-        density, cancer_label, censor_time, train_data = prepare_data(group_data, args)
+        density, cancer_label, censor_time = prepare_data(group_data, args)
         metrics = caluclate_metrics(
             density,
             cancer_label,
             censor_time,
-            train_data,
             args.max_followup,
             args.density_cutoff,
         )
@@ -256,7 +219,7 @@ if __name__ == "__main__":
         results["Censoring Year"].append(args.max_followup)
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
-        results["C Index"].append(metrics.c_index)
+        
 
     # evaluate on different age groups
     for group in args.age_groups:
@@ -267,12 +230,11 @@ if __name__ == "__main__":
         ]
         if len(group_data) == 0:
             continue
-        density, cancer_label, censor_time, train_data = prepare_data(group_data, args)
+        density, cancer_label, censor_time = prepare_data(group_data, args)
         metrics = caluclate_metrics(
             density,
             cancer_label,
             censor_time,
-            train_data,
             args.max_followup,
             args.density_cutoff,
         )
@@ -280,7 +242,7 @@ if __name__ == "__main__":
         results["Censoring Year"].append(args.max_followup)
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
-        results["C Index"].append(metrics.c_index)
+        
 
     results_df = pd.DataFrame(results)
     results_path = os.path.join(

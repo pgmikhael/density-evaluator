@@ -35,18 +35,6 @@ python evaluate_density.py \
 --density_cutoff 3
 ```
 
-To compute the c-statistic, training data is required. The training data should be in the same format as the input data. Only the 
-`Cancer (YES | NO)`, `Date of Cancer Diagnosis`, and `Date of Last Negative Mammogram` columns are required.
-
-```bash
-python evaluate_density.py \
--i example_input.csv \
---max_followup 5 \
---density_cutoff 3 \
---compute_c_index \
---input_train_file example_train_input.csv
-```
-
 To evaluate the performance of the density measurements on different age groups:
 
 ```bash
@@ -58,4 +46,4 @@ python evaluate_density.py \
 ```
 
 ## Output
-The script outputs the relative risk, odds ratio, and optionally c-statistic of the density measurements. The output is saved in a CSV file with the same name as the input file, but with `_results` appended to the name. For example, if the input file is `example_input.csv`, the output file will be `example_input_results.csv`.
+The script outputs the relative risk and odds ratio of the density measurements. The output is saved in a CSV file with the same name as the input file, but with `_results` appended to the name. For example, if the input file is `example_input.csv`, the output file will be `example_input_results.csv`.
