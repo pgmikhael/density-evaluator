@@ -6,7 +6,7 @@ from scipy.stats.contingency import crosstab, relative_risk, odds_ratio
 from sksurv.metrics import concordance_index_ipcw
 import pandas as pd
 from collections import defaultdict
-
+import datetime
 
 class Metrics(NamedTuple):
     relative_risk: float
@@ -109,7 +109,8 @@ def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
         A tuple of density, cancer_label, and censor_time
     """
     # set cancer date to 100 if no cancer
-    data[data["Cancer (YES | NO)"] == 0]["Date of Cancer Diagnosis"] = 100
+    data.loc[data["Cancer (YES | NO)"] == 0, "Date of Cancer Diagnosis"] = data.loc[data["Cancer (YES | NO)"] == 0, 'Exam Date'] + datetime.timedelta(days= int(100 * 365 ))
+    
     density = np.array(data["Density / BI-RADS"])
     date = data["Exam Date"]
     ever_has_cancer = data["Cancer (YES | NO)"]
@@ -186,9 +187,9 @@ parser.add_argument(
     "--max_followup",
     "-d",
     type=int,
-    default=100,
+    default=5,
     required=True,
-    help="Truncation time in years.",
+    help="Truncation time in years. Starts at 0",
 )
 parser.add_argument(
     "--compute_c_index", action="store_true", help="Compute the c-index."
@@ -217,6 +218,10 @@ if __name__ == "__main__":
     # read the data
     data = pd.read_csv(args.input_file)
 
+    # format dates
+    for col in ["Exam Date", "Date of Last Negative Mammogram", "Date of Cancer Diagnosis"]:
+        data[col] = pd.to_datetime(data[col], format='%m/%d/%Y')
+
     # prepare the data with correct censoring and cancer labels
     density, cancer_label, censor_time, train_data = prepare_data(data, args)
 
@@ -230,14 +235,14 @@ if __name__ == "__main__":
     )
 
     results["Group"].append("All")
-    results["Censoring"].append(args.max_followup)
+    results["Censoring Year"].append(args.max_followup)
     results["Relative Risk"].append(metrics.relative_risk)
     results["Odds Ratio"].append(metrics.odds_ratio)
     results["C Index"].append(metrics.c_index)
 
     # evaluate per ethnicity
     for group in data["Ethnicity"].unique():
-        group_data = data[data["Group"] == group]
+        group_data = data[data["Ethnicity"] == group]
         density, cancer_label, censor_time, train_data = prepare_data(group_data, args)
         metrics = caluclate_metrics(
             density,
@@ -248,7 +253,7 @@ if __name__ == "__main__":
             args.density_cutoff,
         )
         results["Group"].append(group)
-        results["Censoring"].append(args.max_followup)
+        results["Censoring Year"].append(args.max_followup)
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
         results["C Index"].append(metrics.c_index)
@@ -260,6 +265,8 @@ if __name__ == "__main__":
         group_data = data[
             (data["Age at Exam"] >= age_lower) & (data["Age at Exam"] < age_upper)
         ]
+        if len(group_data) == 0:
+            continue
         density, cancer_label, censor_time, train_data = prepare_data(group_data, args)
         metrics = caluclate_metrics(
             density,
@@ -270,7 +277,7 @@ if __name__ == "__main__":
             args.density_cutoff,
         )
         results["Group"].append("Age: " + str(age_lower) + "-" + str(age_upper))
-        results["Censoring"].append(args.max_followup)
+        results["Censoring Year"].append(args.max_followup)
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
         results["C Index"].append(metrics.c_index)
@@ -281,3 +288,8 @@ if __name__ == "__main__":
         os.path.basename(args.input_file).split(".")[0] + "_results.csv",
     )
     results_df.to_csv(results_path, index=False)
+
+    # done
+    print(f"""
+        Results saved to: {results_path}
+        """)

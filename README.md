@@ -15,13 +15,13 @@ An example of the data format is provided in [example_input.csv](example_input.c
 
 - PatientID: Unique identifier for each patient
 - ExamID: Unique identifier for each mammogram
-- ExamDate: Date of the mammogram
+- ExamDate: Date of the mammogram. The date should be in the format `MM/DD/YYYY`
 - Density / BI-RADS: Density measurement 
 - Age at Exam: Age of the patient at the time of the mammogram
 - Ethnicity: Ethnicity of the patient
 - Cancer (YES | NO): Whether the patient was diagnosed with cancer within `T`  years of the mammogram
-- Date of Cancer Diagnosis: Date of cancer diagnosis
-- Date of Last Negative Mammogram: Last known date of a negative mammogram
+- Date of Cancer Diagnosis: Date of cancer diagnosis. The date should be in the format `MM/DD/YYYY`
+- Date of Last Negative Mammogram: Last known date of a negative mammogram. The date should be in the format `MM/DD/YYYY`
 
 ## Usage
 
