@@ -260,6 +260,21 @@ if __name__ == "__main__":
     # read the data
     data = pd.read_csv(args.input_file)
 
+    # check if the columns are present
+    required_columns = [
+        "Patient ID",
+        "Exam ID",
+        "Exam Date",
+        "Density / BI-RADS",
+        "Age at Exam",
+        "Ethnicity",
+        "Cancer (YES | NO)",
+        "Date of Cancer Diagnosis",
+        "Date of Last Negative Mammogram"] 
+    for col in required_columns:
+        if col not in data.columns:
+            raise ValueError(f"Column {col} is missing in the input file.")
+        
     # format dates
     for col in ["Exam Date", "Date of Last Negative Mammogram", "Date of Cancer Diagnosis"]:
         data[col] = pd.to_datetime(data[col], format='%Y-%m-%d') #'%m/%d/%Y'
