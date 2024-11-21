@@ -79,6 +79,73 @@ def caluclate_metrics(
     return Metrics(rr.relative_risk, oratio.statistic)
 
 
+def caluclate_age_metrics(
+    ages, cancer_label, censor_time, max_followup, age_cutoffs = [50, 60, 70]
+) -> Metrics:
+    """
+    Calculate the relative risk, odds ratio of the model.
+
+    Parameters
+    ----------
+    ages : list
+        Age of the patients
+    labels : list
+        True cancer labels
+    censor_time : list
+        Time of censoring
+    max_followup : int
+        Truncation time in years
+    age_cutoffs : int
+        The cutoff for what's considered positive.
+
+    Returns
+    -------
+    Metrics
+        A named tuple with the relative risk, odds ratio
+        - relative_risk : float
+            The relative risk of the model
+        - odds_ratio : float
+            The odds ratio of the model; maximum likelihood estimates of the odds ratios
+    """
+    results = []
+    for age in age_cutoffs:
+        binary_age = np.int16(ages >= age)
+        contingency_table = crosstab(binary_age, cancer_label)
+        contingency_table_dict = {}
+        age_values, cancer_values = contingency_table.elements
+        for i, binary_age in enumerate(age_values):
+            age_key = "old" if binary_age == 1 else "young"
+            for j, cancer in enumerate(cancer_values):
+                cancer_key = "cancer" if cancer == 1 else "no_cancer"
+                contingency_table_dict[f"{age_key}_{cancer_key}"] = (
+                    contingency_table.count[i][j]
+                )
+
+        rr = relative_risk(
+            exposed_cases=contingency_table_dict["old_cancer"],
+            exposed_total=contingency_table_dict["old_cancer"]
+            + contingency_table_dict["old_no_cancer"],
+            control_cases=contingency_table_dict["young_cancer"],
+            control_total=contingency_table_dict["young_cancer"]
+            + contingency_table_dict["young_no_cancer"],
+        )
+        table = np.array(
+            [
+                [
+                    contingency_table_dict["old_cancer"],
+                    contingency_table_dict["old_no_cancer"],
+                ],
+                [
+                    contingency_table_dict["young_cancer"],
+                    contingency_table_dict["young_no_cancer"],
+                ],
+            ]
+        )
+        oratio = odds_ratio(table)
+        results.append(Metrics(rr.relative_risk, oratio.statistic))
+    
+    return results
+
 def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
     """
     Prepare the data for the evaluation.
@@ -98,6 +165,7 @@ def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
     # set cancer date to 100 if no cancer
     data.loc[data["Cancer (YES | NO)"] == 0, "Date of Cancer Diagnosis"] = data.loc[data["Cancer (YES | NO)"] == 0, 'Exam Date'] + datetime.timedelta(days= int(100 * 365 ))
     
+    ages = data["Age at Exam"]
     density = np.array(data["Density / BI-RADS"])
     date = data["Exam Date"]
     ever_has_cancer = data["Cancer (YES | NO)"]
@@ -124,8 +192,9 @@ def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
     density = density[valid_rows]
     cancer_label = cancer_label[valid_rows]
     censor_time = censor_time[valid_rows]
+    ages = ages[valid_rows]
 
-    return density, cancer_label, censor_time
+    return density, cancer_label, censor_time, ages
 
 
 def prepare_data(data: pd.DataFrame, args: ArgumentParser) -> tuple:
@@ -144,8 +213,8 @@ def prepare_data(data: pd.DataFrame, args: ArgumentParser) -> tuple:
     tuple
         A tuple of density, cancer_label, censor_time 
     """
-    density, cancer_label, censor_time = format_data(data, args.max_followup)
-    return density, cancer_label, censor_time
+    density, cancer_label, censor_time, ages = format_data(data, args.max_followup)
+    return density, cancer_label, censor_time, ages
 
 
 # input density, age, ethnicity
@@ -172,6 +241,14 @@ parser.add_argument(
     nargs="*",
     help="Age groups to evaluate. Format: 40-50 50-60",
 )
+parser.add_argument(
+    "--age_cutoffs",
+    type=int,
+    default=[40,50,60],
+    nargs="*",
+    help="Ages to use as binary predictor.",
+)
+
 
 
 if __name__ == "__main__":
@@ -188,7 +265,7 @@ if __name__ == "__main__":
         data[col] = pd.to_datetime(data[col], format='%Y-%m-%d') #'%m/%d/%Y'
 
     # prepare the data with correct censoring and cancer labels
-    density, cancer_label, censor_time = prepare_data(data, args)
+    density, cancer_label, censor_time, ages = prepare_data(data, args)
 
     metrics = caluclate_metrics(
         density,
@@ -207,7 +284,7 @@ if __name__ == "__main__":
     # evaluate per ethnicity
     for group in data["Ethnicity"].unique():
         group_data = data[data["Ethnicity"] == group]
-        density, cancer_label, censor_time = prepare_data(group_data, args)
+        density, cancer_label, censor_time, ages = prepare_data(group_data, args)
         metrics = caluclate_metrics(
             density,
             cancer_label,
@@ -230,7 +307,7 @@ if __name__ == "__main__":
         ]
         if len(group_data) == 0:
             continue
-        density, cancer_label, censor_time = prepare_data(group_data, args)
+        density, cancer_label, censor_time, ages = prepare_data(group_data, args)
         metrics = caluclate_metrics(
             density,
             cancer_label,
@@ -244,6 +321,22 @@ if __name__ == "__main__":
         results["Odds Ratio"].append(metrics.odds_ratio)
         
 
+    # use age as a predictor
+    density, cancer_label, censor_time, ages = prepare_data(data, args)
+    age_based_metrics = caluclate_age_metrics(
+        ages,
+        cancer_label,
+        censor_time,
+        args.max_followup,
+        args.age_cutoffs,
+    )
+    for i, age in enumerate(args.age_cutoffs):
+        results["Group"].append("Age as Predictor: " + str(age))
+        results["Censoring Year"].append(args.max_followup)
+        results["Relative Risk"].append(age_based_metrics[i].relative_risk)
+        results["Odds Ratio"].append(age_based_metrics[i].odds_ratio)
+
+    # save the results
     results_df = pd.DataFrame(results)
     results_path = os.path.join(
         os.path.dirname(args.input_file),
