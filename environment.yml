@@ -5,6 +5,7 @@ dependencies:
   - python=3.10
   - pip
   - pip: 
+      - lifelines==0.26.4
       - scipy==1.13.1
       - scikit-survival==0.23.1
       - tqdm==4.62.3

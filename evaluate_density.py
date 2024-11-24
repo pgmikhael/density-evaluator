@@ -7,14 +7,15 @@ from sksurv.metrics import concordance_index_ipcw
 import pandas as pd
 from collections import defaultdict
 import datetime
+from c_index_util import get_censoring_dist, concordance_index
 
 class Metrics(NamedTuple):
     relative_risk: float
     odds_ratio: float
+    c_index: float
 
-
-def caluclate_metrics(
-    density, cancer_label, censor_time, max_followup, density_cutoff=3
+def calculate_metrics(
+    density, cancer_label, censor_time, density_cutoff=3
 ) -> Metrics:
     """
     Calculate the relative risk, odds ratio of the model.
@@ -27,8 +28,6 @@ def caluclate_metrics(
         True cancer labels
     censor_time : list
         Time of censoring
-    max_followup : int
-        Truncation time in years
     density_cutoff : int
         The cutoff for what's considered dense. Default is 3-4.
 
@@ -75,12 +74,21 @@ def caluclate_metrics(
     )
     oratio = odds_ratio(table)
 
+    # calculate c-index
+    censoring_dist = get_censoring_dist(censor_time, cancer_label) # NOTE: computed on test set
+    normalized_density = (density - density.min()) / (density.max() - density.min())
+    c_index = concordance_index(
+        event_times=censor_time,
+        predicted_scores=normalized_density,
+        event_observed=cancer_label,
+        censoring_dist=censoring_dist,
+    )
     
-    return Metrics(rr.relative_risk, oratio.statistic)
+    return Metrics(rr.relative_risk, oratio.statistic, c_index)
 
 
-def caluclate_age_metrics(
-    ages, cancer_label, censor_time, max_followup, age_cutoffs = [50, 60, 70]
+def calculate_age_metrics(
+    ages, cancer_label, censor_time, age_cutoffs = [50, 60, 70]
 ) -> Metrics:
     """
     Calculate the relative risk, odds ratio of the model.
@@ -93,8 +101,6 @@ def caluclate_age_metrics(
         True cancer labels
     censor_time : list
         Time of censoring
-    max_followup : int
-        Truncation time in years
     age_cutoffs : int
         The cutoff for what's considered positive.
 
@@ -109,8 +115,8 @@ def caluclate_age_metrics(
     """
     results = []
     for age in age_cutoffs:
-        binary_age = np.int16(ages >= age)
-        contingency_table = crosstab(binary_age, cancer_label)
+        binary_ages = np.int16(ages >= age)
+        contingency_table = crosstab(binary_ages, cancer_label)
         contingency_table_dict = {}
         age_values, cancer_values = contingency_table.elements
         for i, binary_age in enumerate(age_values):
@@ -142,7 +148,16 @@ def caluclate_age_metrics(
             ]
         )
         oratio = odds_ratio(table)
-        results.append(Metrics(rr.relative_risk, oratio.statistic))
+
+        # calculate c-index
+        censoring_dist = get_censoring_dist(censor_time, cancer_label) # NOTE: computed on test set
+        c_index = concordance_index(
+            event_times=censor_time,
+            predicted_scores=binary_ages,
+            event_observed=cancer_label,
+            censoring_dist=censoring_dist,
+        )
+        results.append(Metrics(rr.relative_risk, oratio.statistic, c_index))
     
     return results
 
@@ -282,11 +297,10 @@ if __name__ == "__main__":
     # prepare the data with correct censoring and cancer labels
     density, cancer_label, censor_time, ages = prepare_data(data, args)
 
-    metrics = caluclate_metrics(
+    metrics = calculate_metrics(
         density,
         cancer_label,
         censor_time,
-        args.max_followup,
         args.density_cutoff,
     )
 
@@ -294,23 +308,24 @@ if __name__ == "__main__":
     results["Censoring Year"].append(args.max_followup)
     results["Relative Risk"].append(metrics.relative_risk)
     results["Odds Ratio"].append(metrics.odds_ratio)
+    results["C-Index"].append(metrics.c_index)
     
 
     # evaluate per ethnicity
     for group in data["Ethnicity"].unique():
         group_data = data[data["Ethnicity"] == group]
         density, cancer_label, censor_time, ages = prepare_data(group_data, args)
-        metrics = caluclate_metrics(
+        metrics = calculate_metrics(
             density,
             cancer_label,
             censor_time,
-            args.max_followup,
             args.density_cutoff,
         )
         results["Group"].append(group)
         results["Censoring Year"].append(args.max_followup)
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
+        results["C-Index"].append(metrics.c_index)
         
 
     # evaluate on different age groups
@@ -323,26 +338,26 @@ if __name__ == "__main__":
         if len(group_data) == 0:
             continue
         density, cancer_label, censor_time, ages = prepare_data(group_data, args)
-        metrics = caluclate_metrics(
+        metrics = calculate_metrics(
             density,
             cancer_label,
             censor_time,
-            args.max_followup,
+
             args.density_cutoff,
         )
         results["Group"].append("Age: " + str(age_lower) + "-" + str(age_upper))
         results["Censoring Year"].append(args.max_followup)
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
+        results["C-Index"].append(metrics.c_index)
         
 
     # use age as a predictor
     density, cancer_label, censor_time, ages = prepare_data(data, args)
-    age_based_metrics = caluclate_age_metrics(
+    age_based_metrics = calculate_age_metrics(
         ages,
         cancer_label,
         censor_time,
-        args.max_followup,
         args.age_cutoffs,
     )
     for i, age in enumerate(args.age_cutoffs):
@@ -350,6 +365,22 @@ if __name__ == "__main__":
         results["Censoring Year"].append(args.max_followup)
         results["Relative Risk"].append(age_based_metrics[i].relative_risk)
         results["Odds Ratio"].append(age_based_metrics[i].odds_ratio)
+        results["C-Index"].append(age_based_metrics[i].c_index)
+
+    # use all ages as a predictor - increasing age is a risk factor
+    censoring_dist = get_censoring_dist(censor_time, cancer_label) # NOTE: computed on test set
+    normalized_age = (ages - ages.min()) / (ages.max() - ages.min())
+    c_index = concordance_index(
+            event_times=censor_time,
+            predicted_scores=normalized_age,
+            event_observed=cancer_label,
+            censoring_dist=censoring_dist,
+        )
+    results["Group"].append("Age as Predictor: All ages")
+    results["Censoring Year"].append(args.max_followup)
+    results["Relative Risk"].append("-")
+    results["Odds Ratio"].append("-")
+    results["C-Index"].append(c_index)
 
     # save the results
     results_df = pd.DataFrame(results)
