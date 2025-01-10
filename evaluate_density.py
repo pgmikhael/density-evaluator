@@ -9,14 +9,14 @@ from collections import defaultdict
 import datetime
 from c_index_util import get_censoring_dist, concordance_index
 
+
 class Metrics(NamedTuple):
     relative_risk: float
     odds_ratio: float
     c_index: float
 
-def calculate_metrics(
-    density, cancer_label, censor_time, density_cutoff=3
-) -> Metrics:
+
+def calculate_metrics(density, cancer_label, censor_time, density_cutoff=3) -> Metrics:
     """
     Calculate the relative risk, odds ratio of the model.
 
@@ -75,7 +75,9 @@ def calculate_metrics(
     oratio = odds_ratio(table)
 
     # calculate c-index
-    censoring_dist = get_censoring_dist(censor_time, cancer_label) # NOTE: computed on test set
+    censoring_dist = get_censoring_dist(
+        censor_time, cancer_label
+    )  # NOTE: computed on test set
     normalized_density = (density - density.min()) / (density.max() - density.min())
     c_index = concordance_index(
         event_times=censor_time,
@@ -83,12 +85,12 @@ def calculate_metrics(
         event_observed=cancer_label,
         censoring_dist=censoring_dist,
     )
-    
+
     return Metrics(rr.relative_risk, oratio.statistic, c_index)
 
 
 def calculate_age_metrics(
-    ages, cancer_label, censor_time, age_cutoffs = [50, 60, 70]
+    ages, cancer_label, censor_time, age_cutoffs=[50, 60, 70]
 ) -> Metrics:
     """
     Calculate the relative risk, odds ratio of the model.
@@ -150,7 +152,9 @@ def calculate_age_metrics(
         oratio = odds_ratio(table)
 
         # calculate c-index
-        censoring_dist = get_censoring_dist(censor_time, cancer_label) # NOTE: computed on test set
+        censoring_dist = get_censoring_dist(
+            censor_time, cancer_label
+        )  # NOTE: computed on test set
         c_index = concordance_index(
             event_times=censor_time,
             predicted_scores=binary_ages,
@@ -158,8 +162,9 @@ def calculate_age_metrics(
             censoring_dist=censoring_dist,
         )
         results.append(Metrics(rr.relative_risk, oratio.statistic, c_index))
-    
+
     return results
+
 
 def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
     """
@@ -178,10 +183,12 @@ def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
         A tuple of density, cancer_label, and censor_time
     """
     # set cancer date to 100 if no cancer
-    data.loc[data["Cancer (YES | NO)"] == 0, "Date of Cancer Diagnosis"] = data.loc[data["Cancer (YES | NO)"] == 0, 'Exam Date'] + datetime.timedelta(days= int(100 * 365 ))
-    
+    data.loc[data["Cancer (YES | NO)"] == 0, "Date of Cancer Diagnosis"] = data.loc[
+        data["Cancer (YES | NO)"] == 0, "Exam Date"
+    ] + datetime.timedelta(days=int(100 * 365))
+
     ages = data["Age at Exam"]
-    density = np.array(data["Density / BI-RADS"])
+    density = np.array(data["Density"])
     date = data["Exam Date"]
     ever_has_cancer = data["Cancer (YES | NO)"]
     last_negative_date = data["Date of Last Negative Mammogram"]
@@ -226,7 +233,7 @@ def prepare_data(data: pd.DataFrame, args: ArgumentParser) -> tuple:
     Returns
     -------
     tuple
-        A tuple of density, cancer_label, censor_time 
+        A tuple of density, cancer_label, censor_time
     """
     density, cancer_label, censor_time, ages = format_data(data, args.max_followup)
     return density, cancer_label, censor_time, ages
@@ -259,11 +266,10 @@ parser.add_argument(
 parser.add_argument(
     "--age_cutoffs",
     type=int,
-    default=[40,50,60],
+    default=[40, 50, 60],
     nargs="*",
     help="Ages to use as binary predictor.",
 )
-
 
 
 if __name__ == "__main__":
@@ -280,19 +286,24 @@ if __name__ == "__main__":
         "Patient ID",
         "Exam ID",
         "Exam Date",
-        "Density / BI-RADS",
+        "Density",
         "Age at Exam",
         "Ethnicity",
         "Cancer (YES | NO)",
         "Date of Cancer Diagnosis",
-        "Date of Last Negative Mammogram"] 
+        "Date of Last Negative Mammogram",
+    ]
     for col in required_columns:
         if col not in data.columns:
             raise ValueError(f"Column {col} is missing in the input file.")
-        
+
     # format dates
-    for col in ["Exam Date", "Date of Last Negative Mammogram", "Date of Cancer Diagnosis"]:
-        data[col] = pd.to_datetime(data[col], format='%Y-%m-%d') #'%m/%d/%Y'
+    for col in [
+        "Exam Date",
+        "Date of Last Negative Mammogram",
+        "Date of Cancer Diagnosis",
+    ]:
+        data[col] = pd.to_datetime(data[col])  #'%m/%d/%Y' # , format='%Y-%m-%d'
 
     # prepare the data with correct censoring and cancer labels
     density, cancer_label, censor_time, ages = prepare_data(data, args)
@@ -309,7 +320,6 @@ if __name__ == "__main__":
     results["Relative Risk"].append(metrics.relative_risk)
     results["Odds Ratio"].append(metrics.odds_ratio)
     results["C-Index"].append(metrics.c_index)
-    
 
     # evaluate per ethnicity
     for group in data["Ethnicity"].unique():
@@ -326,7 +336,6 @@ if __name__ == "__main__":
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
         results["C-Index"].append(metrics.c_index)
-        
 
     # evaluate on different age groups
     for group in args.age_groups:
@@ -342,7 +351,6 @@ if __name__ == "__main__":
             density,
             cancer_label,
             censor_time,
-
             args.density_cutoff,
         )
         results["Group"].append("Age: " + str(age_lower) + "-" + str(age_upper))
@@ -350,7 +358,6 @@ if __name__ == "__main__":
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
         results["C-Index"].append(metrics.c_index)
-        
 
     # use age as a predictor
     density, cancer_label, censor_time, ages = prepare_data(data, args)
@@ -368,14 +375,16 @@ if __name__ == "__main__":
         results["C-Index"].append(age_based_metrics[i].c_index)
 
     # use all ages as a predictor - increasing age is a risk factor
-    censoring_dist = get_censoring_dist(censor_time, cancer_label) # NOTE: computed on test set
+    censoring_dist = get_censoring_dist(
+        censor_time, cancer_label
+    )  # NOTE: computed on test set
     normalized_age = (ages - ages.min()) / (ages.max() - ages.min())
     c_index = concordance_index(
-            event_times=censor_time,
-            predicted_scores=normalized_age,
-            event_observed=cancer_label,
-            censoring_dist=censoring_dist,
-        )
+        event_times=censor_time,
+        predicted_scores=normalized_age,
+        event_observed=cancer_label,
+        censoring_dist=censoring_dist,
+    )
     results["Group"].append("Age as Predictor: All ages")
     results["Censoring Year"].append(args.max_followup)
     results["Relative Risk"].append("-")

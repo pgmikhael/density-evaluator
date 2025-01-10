@@ -144,3 +144,5 @@ Thumbs.db
 
 # ruff
 .ruff_cache/
+
+data/
