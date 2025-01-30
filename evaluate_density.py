@@ -8,7 +8,9 @@ import pandas as pd
 from collections import defaultdict
 import datetime
 from c_index_util import get_censoring_dist, concordance_index
-
+import hashlib
+import random
+import pickle
 
 class Metrics(NamedTuple):
     relative_risk: float
@@ -205,19 +207,109 @@ def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
     cancer_label = (years_to_cancer <= max_followup) & ever_has_cancer
 
     # valid rows
-    valid_rows = (years_to_last_negative >= max_followup) | cancer_label
+    valid_rows = (years_to_last_negative >= max_followup) | cancer_label & (years_to_cancer >= 0)
 
     # construct censor_time array
     censor_time = np.where(cancer_label, years_to_cancer, years_to_last_negative)
 
     # remove invalid rows
     density = density[valid_rows]
-    cancer_label = cancer_label[valid_rows]
-    censor_time = censor_time[valid_rows]
+    cancer_label = np.int32(cancer_label[valid_rows])
+    censor_time = np.int32(censor_time[valid_rows])
     ages = ages[valid_rows]
 
     return density, cancer_label, censor_time, ages
 
+    
+    
+def hash(data, seed):
+    """
+    Hash the data with a random seed.
+
+    Parameters
+    ----------
+    data : str
+        The input data
+    seed : int
+        random seed
+
+    Returns
+    -------
+    str
+        A hashed string with random seed
+    """
+    random.seed(seed)
+    randnum = random.randint(0, 2**32 - 1)
+    hasher = hashlib.sha256()
+    hasher.update(data.encode())
+    hasher.update(randnum.to_bytes(4, 'big'))
+    hashed_data = hasher.hexdigest()
+    return hashed_data
+
+def unidentify_data(data: pd.DataFrame, seed: int) -> tuple:
+    """
+    Prepare the data for the evaluation.
+
+    Parameters
+    ----------
+    data : pd.DataFrame
+        The input data
+    seed : int
+        random seed
+
+    Returns
+    -------
+    dict
+        A dictionary of data with hashed Patient ID and Exam ID
+    """
+    # set cancer date to 100 if no cancer
+    data.loc[data["Cancer (YES | NO)"] == 0, "Date of Cancer Diagnosis"] = data.loc[
+        data["Cancer (YES | NO)"] == 0, "Exam Date"
+    ] + datetime.timedelta(days=int(100 * 365))
+
+    ages = data["Age at Exam"]
+    density = np.array(data["Density"])
+    date = data["Exam Date"]
+    ever_has_cancer = data["Cancer (YES | NO)"]
+    last_negative_date = data["Date of Last Negative Mammogram"]
+    cancer_date = data["Date of Cancer Diagnosis"]
+    # compute the time of censoring relative to exam date
+    years_to_last_negative = (last_negative_date - date).dt.days // 365
+
+    # compute the time of cancer diagnosis relative to exam date or max_followup
+    years_to_cancer = ((cancer_date - date).dt.days // 365).copy()
+
+    # positives are those who developed cancer within the follow-up period
+    cancer_label = ever_has_cancer
+
+    censor_time = np.where(cancer_label, years_to_cancer, years_to_last_negative)
+
+    valid_rows = (years_to_last_negative >= 0) | cancer_label & (years_to_cancer >= 0)
+
+    processed_data = {
+        "density": density[valid_rows],
+        "cancer_label": cancer_label[valid_rows],
+        "censor_time": censor_time[valid_rows],
+        "ages": ages[valid_rows],
+        "ethnicity": list(data["Ethnicity"][valid_rows]),
+    }
+
+    pid_map = {}
+    for pid in data["Patient ID"].unique():
+        new_pid = hash(pid, seed)
+        pid_map[pid] = new_pid
+    
+    eid_map = {}
+    for eid in data["Exam ID"].unique():
+        new_eid = hash(eid, seed)
+        eid_map[eid] = new_eid
+    
+    data["Patient ID"] = data["Patient ID"].map(pid_map)
+    data["Exam ID"] = data["Exam ID"].map(eid_map)
+    processed_data["pid"] = list(data["Patient ID"][valid_rows])
+    processed_data["eid"] = list(data["Exam ID"][valid_rows])
+    return processed_data
+    
 
 def prepare_data(data: pd.DataFrame, args: ArgumentParser) -> tuple:
     """
@@ -270,10 +362,24 @@ parser.add_argument(
     nargs="*",
     help="Ages to use as binary predictor.",
 )
-
+parser.add_argument(
+    "--deidentify_and_save",
+    action="store_true",
+    default=False,
+    help="Save the formatted data.",
+)
+parser.add_argument(
+    "--seed",
+    type=int,
+    default=None,
+    help= "Seed for deidentification hash.",
+)
 
 if __name__ == "__main__":
     args = parser.parse_args()
+
+    # input variables to save
+    input_variables = {}
 
     # collect results in a dictionary / dataframe
     results = defaultdict(list)
@@ -305,6 +411,17 @@ if __name__ == "__main__":
     ]:
         data[col] = pd.to_datetime(data[col])  #'%m/%d/%Y' # , format='%Y-%m-%d'
 
+    if args.deidentify_and_save:
+        assert args.seed, "Seed must be provided to save statistics."
+        format_and_deidentify = unidentify_data(data, args.seed)
+        # save the data
+        data_path = os.path.join(
+            os.path.dirname(args.input_file),
+            os.path.basename(args.input_file).split(".")[0] + "_unidentified.p",
+        )
+        pickle.dump(format_and_deidentify, open(data_path, "wb"))
+
+    
     # prepare the data with correct censoring and cancer labels
     density, cancer_label, censor_time, ages = prepare_data(data, args)
 
@@ -358,7 +475,6 @@ if __name__ == "__main__":
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
         results["C-Index"].append(metrics.c_index)
-
     # use age as a predictor
     density, cancer_label, censor_time, ages = prepare_data(data, args)
     age_based_metrics = calculate_age_metrics(

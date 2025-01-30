@@ -21,7 +21,7 @@ An example of the data format is provided in [example_input.csv](example_input.c
 - Ethnicity: Ethnicity of the patient
 - Cancer (YES | NO): Whether the patient was diagnosed with cancer within `T`  years of the mammogram
 - Date of Cancer Diagnosis: Date of cancer diagnosis. The date should be in the format `MM/DD/YYYY`
-- Date of Last Negative Mammogram: Last known date of a negative mammogram. The date should be in the format `MM/DD/YYYY`
+- Date of Last Negative Mammogram: Last known date of a negative mammogram (i.e., date of the most recent negative mammogram). The date should be in the format `MM/DD/YYYY`
 
 ## Usage
 
@@ -44,6 +44,10 @@ python evaluate_density.py \
 --density_cutoff 3 \
 --age_groups 40-50 50-60 60-70
 ```
+
+To format and save the data with deidentified IDs add the arguments `--deidentify_and_save --seed 123`. The seed is required to generate the deidentified IDs in a random manner.
+
+
 
 ## Output
 The script outputs the relative risk and odds ratio of the density measurements. The output is saved in a CSV file with the same name as the input file, but with `_results` appended to the name. For example, if the input file is `example_input.csv`, the output file will be `example_input_results.csv`.
