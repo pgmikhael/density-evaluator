@@ -17,43 +17,11 @@ parser = ArgumentParser()
 parser.add_argument(
     "--input_file", "-i", type=str, required=True, help="Path to the input CSV file."
 )
-parser.add_argument(
-    "--max_followup",
-    "-d",
-    type=int,
-    default=5,
-    required=True,
-    help="Truncation time in years. Starts at 0",
-)
-parser.add_argument(
-    "--density_cutoff", type=str, default=3, help="Cutoff for density. Default is 3-4."
-)
-parser.add_argument(
-    "--age_groups",
-    type=str,
-    default=[],
-    nargs="*",
-    help="Age groups to evaluate. Format: 40-50 50-60",
-)
-parser.add_argument(
-    "--age_cutoffs",
-    type=int,
-    default=[40, 50, 60, 70],
-    nargs="*",
-    help="Ages to use as binary predictor.",
-)
-parser.add_argument(
-    "--deidentify_and_save",
-    action="store_true",
-    default=False,
-    help="Save the formatted data.",
-)
-parser.add_argument(
-    "--seed",
-    type=int,
-    default=None,
-    help= "Seed for deidentification hash.",
-)
+
+age_groups = ["30-40", "40-50", "50-60", "60-70", "70-80"]
+age_cutoffs = [40, 50, 60, 70]
+density_cutoff = 3
+max_followup_range = range(0, 10)
 
 
 def include_exam_and_determine_label(censor_times, golds, followup):
@@ -128,8 +96,8 @@ if __name__ == "__main__":
         else:
             raise ValueError(f"Data type not supported: {type(v)}")
 
-    density_cutoff = 3
-    for max_followup in range(0, 10):
+    
+    for max_followup in max_followup_range:
         for data, site in [(merged_data_unidentified, "Merged"), (format_and_deidentify, "MGH")]:
             
             density, cancer_label, censor_time, age, ethnicity = data["density"], data["cancer_label"], data["censor_time"], data["ages"], data["ethnicity"]
