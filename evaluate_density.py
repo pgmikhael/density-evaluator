@@ -284,7 +284,7 @@ def unidentify_data(data: pd.DataFrame, seed: int) -> tuple:
 
     censor_time = np.where(cancer_label, years_to_cancer, years_to_last_negative)
 
-    valid_rows = (years_to_last_negative >= 0) | cancer_label & (years_to_cancer >= 0)
+    valid_rows = (years_to_last_negative >= 0) | (cancer_label.astype(bool) & (years_to_cancer >= 0))
 
     processed_data = {
         "density": density[valid_rows],
@@ -295,11 +295,13 @@ def unidentify_data(data: pd.DataFrame, seed: int) -> tuple:
     }
 
     pid_map = {}
+    data["Patient ID"] = data["Patient ID"].astype(str)
     for pid in data["Patient ID"].unique():
         new_pid = hash(pid, seed)
         pid_map[pid] = new_pid
     
     eid_map = {}
+    data["Exam ID"] = data["Exam ID"].astype(str)
     for eid in data["Exam ID"].unique():
         new_eid = hash(eid, seed)
         eid_map[eid] = new_eid

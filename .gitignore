@@ -146,3 +146,4 @@ Thumbs.db
 .ruff_cache/
 
 data/
+format.ipynb
