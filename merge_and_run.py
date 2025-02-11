@@ -189,6 +189,7 @@ if __name__ == "__main__":
                 results["Relative Risk"].append(metrics.relative_risk)
                 results["Odds Ratio"].append(metrics.odds_ratio)
                 results["C-Index"].append(metrics.c_index)
+                results["Followup"].append(max_followup)
 
             # use age as a predictor
             age_based_metrics = calculate_age_metrics(
