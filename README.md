@@ -40,7 +40,7 @@ To evaluate the performance of the density measurements on different age groups:
 ```bash
 python evaluate_density.py \
 -i example_input.csv \
---max_followup 5 \
+--max_followup 4 \ # Maximum follow-up time in years, indexed at 0
 --density_cutoff 3 \
 --age_groups 40-50 50-60 60-70
 ```
