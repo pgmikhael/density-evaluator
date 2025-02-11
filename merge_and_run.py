@@ -17,6 +17,12 @@ parser = ArgumentParser()
 parser.add_argument(
     "--input_file", "-i", type=str, required=True, help="Path to the input CSV file."
 )
+parser.add_argument(
+    "--seed",
+    type=int,
+    default=None,
+    help= "Seed for deidentification hash.",
+)
 
 age_groups = ["30-40", "40-50", "50-60", "60-70", "70-80"]
 age_cutoffs = [40, 50, 60, 70]
@@ -42,7 +48,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     merged_data_unidentified = pickle.load(open("merged_data_unidentified.p", "rb"))
-
 
     # collect results in a dictionary / dataframe
     results = defaultdict(list)
@@ -83,6 +88,27 @@ if __name__ == "__main__":
         "Num cancer pids": data.groupby('Patient ID')['Cancer (YES | NO)'].max().sum(),
     }
 
+    # density statistics
+    density_grp = data.groupby('Density')
+    for name, group in density_grp:
+        statistics[f"density{name} exams"] = len(group['Exam ID'].unique())
+        statistics[f"density{name} patients"] = len(group['Patient ID'].unique())
+
+    # demographics ethnicity 
+    race_grp = data.groupby('Ethnicity')
+    for name, group in race_grp:
+        statistics[f"{name} exams"] = len(group['Exam ID'].unique())
+        statistics[f"{name} patients"] = len(group['Patient ID'].unique())
+
+    # demographics of age
+    bins = [30, 40, 50, 60, 70, 80]
+    labels = ['30-40', '40-50', '50-60', '60-70', '70-80']
+    # Bin the 'value' column
+    data['range'] = pd.cut(data['Age at Exam'], bins=bins, labels=labels, right=False)
+    age_grp = data.groupby('range')
+    for name, group in age_grp:
+        statistics[f"{name} exams"] = len(group['Exam ID'].unique())
+        statistics[f"{name} patients"] = len(group['Patient ID'].unique())
 
 
     format_and_deidentify = unidentify_data(data, args.seed)
@@ -126,6 +152,7 @@ if __name__ == "__main__":
             results["Followup"].append(max_followup)
 
             # evaluate per ethnicity
+            ethnicity = ethnicity.str.lower() # lower 
             for group in set(ethnicity):
                 group_data = df[df["Ethnicity"] == group]
                 metrics = calculate_metrics(
@@ -142,7 +169,7 @@ if __name__ == "__main__":
                 results["Followup"].append(max_followup)
 
             # evaluate on different age groups
-            for group in args.age_groups:
+            for group in age_groups:
                 age_lower, age_upper = group.split("-")
                 age_lower, age_upper = int(age_lower), int(age_upper)
                 group_data = df[
@@ -155,7 +182,7 @@ if __name__ == "__main__":
                     group_data["Density"],
                     group_data["Cancer"],
                     group_data["Censor Time"],
-                    args.density_cutoff,
+                    density_cutoff,
                 )
                 results["Group"].append(f"{site}-Age: " + str(age_lower) + "-" + str(age_upper))
                 results["Censoring Year"].append(max_followup)
@@ -168,9 +195,9 @@ if __name__ == "__main__":
                 df["Age at Exam"],
                 df["Cancer"],
                 df["Censor Time"],
-                args.age_cutoffs,
+                age_cutoffs,
             )
-            for i, age in enumerate(args.age_cutoffs):
+            for i, age in enumerate(age_cutoffs):
                 results["Group"].append(f"{site}-Age as Predictor: " + str(age))
                 results["Censoring Year"].append(max_followup)
                 results["Relative Risk"].append(age_based_metrics[i].relative_risk)
