@@ -348,7 +348,7 @@ parser.add_argument(
     help="Truncation time in years. Starts at 0",
 )
 parser.add_argument(
-    "--density_cutoff", type=str, default=3, help="Cutoff for density. Default is 3-4."
+    "--density_cutoff", type=int, default=3, help="Cutoff for density. Default is 3-4."
 )
 parser.add_argument(
     "--age_groups",
