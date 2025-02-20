@@ -42,6 +42,7 @@ def calculate_metrics(density, cancer_label, censor_time, density_cutoff=3) -> M
         - odds_ratio : float
             The odds ratio of the model; maximum likelihood estimates of the odds ratios
     """
+    censor_time = np.int32(censor_time)
     binary_density = np.int16(density >= density_cutoff)
     contingency_table = crosstab(binary_density, cancer_label)
     contingency_table_dict = {}
@@ -117,6 +118,7 @@ def calculate_age_metrics(
         - odds_ratio : float
             The odds ratio of the model; maximum likelihood estimates of the odds ratios
     """
+    censor_time = np.int32(censor_time)
     results = []
     for age in age_cutoffs:
         binary_ages = np.int16(ages >= age)
