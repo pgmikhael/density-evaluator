@@ -408,6 +408,7 @@ if __name__ == "__main__":
             raise ValueError(f"Column {col} is missing in the input file.")
 
     # format dates
+    print('Formatting dates...')
     for col in [
         "Exam Date",
         "Date of Last Negative Mammogram",
@@ -415,7 +416,16 @@ if __name__ == "__main__":
     ]:
         data[col] = pd.to_datetime(data[col])  #'%m/%d/%Y' # , format='%Y-%m-%d'
 
+    # check label
+    print('✓ Formatting labels...')
+    if sorted(data["Cancer (YES | NO)"].unique().tolist()) == ['NO', 'YES']:
+        data["Cancer (YES | NO)"] = data["Cancer (YES | NO)"].map({"YES": 1, "NO": 0})
+    elif data["Cancer (YES | NO)"].dtype == bool:
+        data["Cancer (YES | NO)"] = data["Cancer (YES | NO)"].astype(int)
+
+
     if args.deidentify_and_save:
+        print('✓ Deidentifying data...')
         assert args.seed, "Seed must be provided to save statistics."
         format_and_deidentify = unidentify_data(data, args.seed)
         # save the data
@@ -435,6 +445,7 @@ if __name__ == "__main__":
         censor_time,
         args.density_cutoff,
     )
+    print("✓ Calculated metrics for full data...")
 
     results["Group"].append("All")
     results["Censoring Year"].append(args.max_followup)
@@ -457,6 +468,7 @@ if __name__ == "__main__":
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
         results["C-Index"].append(metrics.c_index)
+        print(f"✓ Calculated metrics for {group}...")
 
     # evaluate on different age groups
     for group in args.age_groups:
@@ -479,6 +491,8 @@ if __name__ == "__main__":
         results["Relative Risk"].append(metrics.relative_risk)
         results["Odds Ratio"].append(metrics.odds_ratio)
         results["C-Index"].append(metrics.c_index)
+        print(f"✓ Calculated metrics for {group}...")
+
     # use age as a predictor
     density, cancer_label, censor_time, ages = prepare_data(data, args)
     age_based_metrics = calculate_age_metrics(
@@ -487,6 +501,8 @@ if __name__ == "__main__":
         censor_time,
         args.age_cutoffs,
     )
+    print(f"✓ Calculated metrics for {args.age_cutoffs}...")
+
     for i, age in enumerate(args.age_cutoffs):
         results["Group"].append("Age as Predictor: " + str(age))
         results["Censoring Year"].append(args.max_followup)
@@ -510,6 +526,7 @@ if __name__ == "__main__":
     results["Relative Risk"].append("-")
     results["Odds Ratio"].append("-")
     results["C-Index"].append(c_index)
+    print(f"✓ Calculated metrics for age as a continuous variable...")
 
     # save the results
     results_df = pd.DataFrame(results)
