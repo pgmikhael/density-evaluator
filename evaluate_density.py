@@ -198,6 +198,7 @@ def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
     last_negative_date = data["Date of Last Negative Mammogram"]
     cancer_date = data["Date of Cancer Diagnosis"]
     # compute the time of censoring relative to exam date
+    days_to_last_negative = (last_negative_date - date).dt.days
     years_to_last_negative = np.minimum(
         (last_negative_date - date).dt.days // 365, max_followup
     )
@@ -206,11 +207,11 @@ def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
     years_to_cancer = ((cancer_date - date).dt.days // 365).copy()
 
     # positives are those who developed cancer within the follow-up period
-    cancer_label = (years_to_cancer <= max_followup) & ever_has_cancer
+    cancer_label = (years_to_cancer >= 0) & (years_to_cancer <= max_followup) & ever_has_cancer
 
     # valid rows
-    valid_rows = (years_to_last_negative >= max_followup) | cancer_label & (years_to_cancer >= 0)
-
+    valid_rows = ((years_to_last_negative >= max_followup) &  (days_to_last_negative>0)) | (cancer_label & (years_to_cancer >= 0))
+   
     # construct censor_time array
     censor_time = np.where(cancer_label, years_to_cancer, years_to_last_negative)
 
@@ -221,7 +222,6 @@ def format_data(data: pd.DataFrame, max_followup: int) -> tuple:
     ages = ages[valid_rows]
 
     return density, cancer_label, censor_time, ages
-
     
     
 def hash(data, seed):
@@ -455,6 +455,9 @@ if __name__ == "__main__":
 
     # evaluate per ethnicity
     for group in data["Ethnicity"].unique():
+
+        if group in ["Ninguno", "Otro", "Amerindio", "Gitano (Rom)"]: continue 
+
         group_data = data[data["Ethnicity"] == group]
         density, cancer_label, censor_time, ages = prepare_data(group_data, args)
         metrics = calculate_metrics(

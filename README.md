@@ -51,3 +51,31 @@ To format and save the data with deidentified IDs add the arguments `--deidentif
 
 ## Output
 The script outputs the relative risk and odds ratio of the density measurements. The output is saved in a CSV file with the same name as the input file, but with `_results` appended to the name. For example, if the input file is `example_input.csv`, the output file will be `example_input_results.csv`.
+
+
+Breast Density Study Data Questions + Authorlist
+
+
+Hi,
+
+We’re in the process of drafting the manuscript analyzing the predictive power of breast density. Could you send me a detailed description of how the data we’re using was collected. Specifically, we need to include the following details: 
+- Is this all the data that you have with density and outcome data at your institution or a subset? 
+- If it is a subset, how was it obtained (randomly or through other method)? 
+- How was cancer diagnosis defined? Is it biopsy-confirmed? Is it ductal carcinoma in situ or invasive disease, or something else?
+
+Also, please let us know who should be included in the author list, as well as affiliations.
+
+Thank you!
+
+Peter
+
+
+
+
+MGH: Leslie
+CGMH: Gigin Lin <giginlin@gmail.com>, Yin-Tzu Lin <lin.ytzu@gmail.com>
+CMU: 林碩彥 LIN SHUO-YEN <100998@tool.caaumed.org.tw>, 巫旻諺 WU MIN-YEN <083742@tool.caaumed.org.tw>, 姜秀穎 Hsiu-Yin Chiang <032031@tool.caaumed.org.tw>, 郭醫師 <fenderkuo@gmail.com>
+Chile: Diego Kauer <diego.kauer@ug.uchile.cl>
+UCSF: "Chung, Maggie" <Maggie.Chung@ucsf.edu>, "Chou, Shinn-Huey" <Shirley.Chou@ucsf.edu>, Adam Yala <yala@berkeley.edu>
+Emory: "Satya Isaac, Rohan" <rohan.satya.isaac@emory.edu>, "Trivedi, Hari" <hari.trivedi@emory.edu>
+India: "Dr. Sujoy Kar" <drsujoy_k@apollohospitals.com>, Bharath Potla <bharath_p@apollohospitals.com>, Tameem Ansari <tameem_a@apollohospitals.com>
